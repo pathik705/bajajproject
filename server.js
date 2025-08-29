@@ -1,81 +1,108 @@
-import express from "express";
+const express = require("express");
+const cors = require("cors");
 
 const app = express();
-app.use(express.json());
+app.use(cors());
+app.use(express.json({ limit: "1mb" }));
 
-const isNum = (x) => typeof x === "string" && /^-?\d+$/.test(x);
-const isAlpha = (x) => typeof x === "string" && /^[A-Za-z]+$/.test(x);
+const fullName = "Pathik yadav";
+const dob = "05102004";
+const email = "pathik.yadav2022@vitstudent.ac.in";
+const rollNumber = "22BCE2961";
 
-const altCaps = (s) =>
-  s
-    .split("")
-    .map((c, i) => (i % 2 === 0 ? c.toUpperCase() : c.toLowerCase()))
+function createUserId(name, dobStr) {
+  const formatted = name.trim().toLowerCase().replace(/\s+/g, "_");
+  return `${formatted}_${dobStr}`;
+}
+
+function isInteger(str) {
+  return /^-?\d+$/.test(str);
+}
+
+function isAlphabet(str) {
+  return /^[A-Za-z]+$/.test(str);
+}
+
+function alternatingCapsReverse(letters) {
+  const reversed = [...letters].reverse();
+  return reversed
+    .map((ch, idx) => (idx % 2 === 0 ? ch.toUpperCase() : ch.toLowerCase()))
     .join("");
-
-const proc = (arr) => {
-  let ev = [], od = [], al = [], sp = [], sm = 0, all = "";
-
-  for (const x of arr) {
-    const v = String(x);
-    if (isNum(v)) {
-      const n = parseInt(v, 10);
-      sm += n;
-      (Math.abs(n) % 2 === 0 ? ev : od).push(v);
-    } else if (isAlpha(v)) {
-      const u = v.toUpperCase();
-      al.push(u);
-      all += u;
-    } else {
-      sp.push(v);
-    }
-  }
-
-  return {
-    ev, od, al, sp,
-    sm: String(sm),
-    cat: altCaps(all.split("").reverse().join(""))
-  };
-};
-
-const nm = (process.env.FULL_NAME || "pathik_yadav").toLowerCase().replace(/\s+/g, "_");
-const dt = process.env.DATE_DDMMYYYY || "29082025";
-const em = process.env.EMAIL || "pathik@example.com";
-const rn = process.env.ROLL_NUMBER || "VITXXXXXX";
-
-app.get("/", (req, res) => {
-  res.json({ ok: true, msg: "Use POST /bfhl" });
-});
+}
 
 app.post("/bfhl", (req, res) => {
-  const d = req.body?.data;
-  if (!Array.isArray(d)) {
-    return res.json({
+  const userId = createUserId(fullName, dob);
+
+  try {
+    const { data } = req.body || {};
+    if (!Array.isArray(data)) {
+      return res.status(400).json({
+        is_success: false,
+        user_id: userId,
+        email,
+        roll_number: rollNumber,
+        message: "Invalid input. Expected format: { data: [...] }"
+      });
+    }
+
+    const evenNums = [];
+    const oddNums = [];
+    const alphabets = [];
+    const specials = [];
+    let totalSum = 0;
+    const charsForConcat = [];
+
+    for (const entry of data) {
+      const strVal = String(entry);
+      for (const ch of strVal) {
+        if (/[A-Za-z]/.test(ch)) charsForConcat.push(ch);
+      }
+
+      if (isInteger(strVal)) {
+        const num = parseInt(strVal, 10);
+        totalSum += num;
+        if (Math.abs(num) % 2 === 0) {
+          evenNums.push(strVal);
+        } else {
+          oddNums.push(strVal);
+        }
+      } else if (isAlphabet(strVal)) {
+        alphabets.push(strVal.toUpperCase());
+      } else {
+        specials.push(strVal);
+      }
+    }
+
+    const concatString = alternatingCapsReverse(charsForConcat);
+
+    return res.status(200).json({
+      is_success: true,
+      user_id: userId,
+      email,
+      roll_number: rollNumber,
+      odd_numbers: oddNums,
+      even_numbers: evenNums,
+      alphabets,
+      special_characters: specials,
+      sum: String(totalSum),
+      concat_string: concatString
+    });
+  } catch (err) {
+    return res.status(500).json({
       is_success: false,
-      user_id: `${nm}_${dt}`,
-      email: em,
-      roll_number: rn,
-      msg: "Invalid input"
+      user_id: createUserId(fullName, dob),
+      email,
+      roll_number: rollNumber,
+      message: "Internal server error"
     });
   }
-
-  const r = proc(d);
-  res.json({
-    is_success: true,
-    user_id: `${nm}_${dt}`,
-    email: em,
-    roll_number: rn,
-    odd_numbers: r.od,
-    even_numbers: r.ev,
-    alphabets: r.al,
-    special_characters: r.sp,
-    sum: r.sm,
-    concat_string: r.cat
-  });
 });
 
-app.use((req, res) => {
-  res.status(404).json({ is_success: false, msg: "Not found" });
+app.get("/", (_req, res) => {
+  res.json({ status: "OK", route: "/bfhl", method: "POST" });
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`API running on ${port}`));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`BFHL API running on port ${PORT}`);
+});
